@@ -8,6 +8,8 @@ var Game = Class.extend({
     init: function(self) {
         self.drawers = [];
         self.last_tick = +new Date();
+        self.launchers = [];
+        self.launcher_count = 2;
 
         self.canvas = document.getElementById('canvas');
         self.ctx = self.canvas.getContext('2d');
@@ -19,18 +21,22 @@ var Game = Class.extend({
 
         $(self.canvas).on('click', $.proxy(self.click, self));
         $(self.canvas).on('touchstart', $.proxy(self.touchstart, self));
-        $(self.canvas).on('touchmove', $.proxy(self.touchmove, self));
-        $(self.canvas).on('touchend', $.proxy(self.touchend, self));
 
         self.world = {
             'grav': 0.8,
             'drag': 0.003,
         }
 
-        self.launchers = [];
+        self.options = new Options();
+    },
+
+    make_launchers: function(self) {
         self.cur_launcher = 0;
-        var skew = (self.canvas.width - 50) / 2;
-        for (var i=0; i < 3; i++) {
+        for (var i = self.launchers.length - 1; i > 0; i--) {
+            self.launchers[i].remove();
+        }
+        var skew = (self.canvas.width - 50) / (self.launcher_count - 1);
+        for (var i=0; i < self.launcher_count; i++) {
             self.launchers[i] = new Launcher(self, skew * i + 25, self.canvas.height - 25);
         }
     },
@@ -61,7 +67,7 @@ var Game = Class.extend({
     do_touch: function(self, x, y) {
         self.launchers[self.cur_launcher].queue_add(x, y);
         self.cur_launcher++;
-        self.cur_launcher %= 3;
+        self.cur_launcher %= self.launcher_count;
     },
 
     click: function(self, e) {
@@ -86,29 +92,10 @@ var Game = Class.extend({
         event.preventDefault();
     },
 
-    touchmove: function(self, e) {
-        var event = e.originalEvent;
-
-        if (event.changedTouches === undefined) {
-            return;
-        }
-
-        event.preventDefault();
-    },
-
-    touchend: function(self, e) {
-        var event = e.originalEvent;
-
-        if (event.changedTouches === undefined) {
-            return;
-        }
-
-        event.preventDefault();
-    },
-
     resizeCanvas: function(self) {
         self.canvas.width = window.innerWidth;
         self.canvas.height = window.innerHeight;
+        self.make_launchers();
         self.redraw();
     },
 });
@@ -329,17 +316,33 @@ var Particle = PhysicsObject.extend({
 
     draw: function(self, ctx) {
         self._super(ctx);
+        var style = self.game.options.particles.style;
         ctx.save();
 
         ctx.strokeStyle = self.color.hex();
-        ctx.lineWidth = self.size;
-
+        ctx.fillStyle = self.color.hex();
         ctx.beginPath();
-        ctx.moveTo(self.x, self.y);
-        ctx.lineTo(self.x - self.vel.x, self.y - self.vel.y);
-        ctx.stroke();
+        if (style == 'line') {
+            ctx.lineWidth = self.size;
+            ctx.moveTo(self.x, self.y);
+            ctx.lineTo(self.x - self.vel.x, self.y - self.vel.y);
+        } else if (style == 'dot') {
+            ctx.arc(self.x, self.y, self.size, 0, Math.PI*2, true);
+            ctx.closePath();
+        } else if (style == 'bubble') {
+            ctx.lineWidth = 1;
+            ctx.arc(self.x, self.y, self.size * 1.25, 0, Math.PI*2, true);
+            ctx.closePath();
+        }
+
+        if (style == 'line' || style == 'bubble') {
+            ctx.stroke();
+        } else {
+            ctx.fill();
+        }
 
         ctx.restore();
+        return
     },
 
     remove: function(self) {
