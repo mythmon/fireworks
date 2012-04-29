@@ -53,6 +53,9 @@ var Game = Class.extend({
         for (var i = self.drawers.length - 1; i >= 0; i--) {
             self.drawers[i].draw(self.ctx);
         }
+
+        self.ctx.fillStyle = "#0F0";
+        self.ctx.fillText("Drawers: " + self.drawers.length, 0, self.canvas.height);
     },
 
     do_touch: function(self, x, y) {
@@ -226,6 +229,12 @@ var Firework = PhysicsObject.extend({
         self.drag = 0;
         self.fuse = fuse;
         self.vel = vel;
+
+        self.base_color = new Color({
+            'hue': Math.random()*360,
+            'saturation': 100,
+            'lightness': 50,
+        });
     },
 
     tick: function(self, t) {
@@ -242,59 +251,59 @@ var Firework = PhysicsObject.extend({
         if (self.fuse <= 0) {
             self.explode();
         }
-    },
 
-    draw: function(self, ctx) {
-        self._super(ctx);
-        ctx.save();
-
-        ctx.fillStyle = 'rgb(255, 200, 200)';
-        ctx.beginPath();
-        ctx.arc(self.x, self.y, 2, 0, Math.PI*2, true);
-        ctx.closePath();
-        ctx.fill();
-        ctx.stroke();
-
-        ctx.restore();
+        if (self.fuse > 5) {
+            self.make_trail();
+            self.make_trail();
+        }
     },
 
     explode: function(self) {
         var particles_per_explosion = 60;
-        var color = new Color({
-            'hue': Math.random()*360,
-            'saturation': 100,
-            'lightness': 50,
-        });
         for (var j=0; j < particles_per_explosion; j++) {
-            new Particle(self.game, self.x, self.y, color);
+            var color = new Color(self.base_color);
+
+            var h = color.hue();
+            var s = color.saturation();
+            var l = color.lightness();
+            color.set({
+                hue: h + Math.random() * 30 - 15,
+                saturation: s - Math.random() * 10,
+                lightness: l + Math.random() * 20 - 10
+            });
+
+            var lifetime = Math.random() * 20 + 10;
+            var size = Math.random() + 1;
+
+            var angle = Math.random() * Math.PI * 2;
+            var mag = Math.random() * 20 + 5;
+            var vel = new Vector().polar(angle, mag);
+
+            new Particle(self.game, self.x, self.y, vel, color, lifetime, size);
         }
         self.remove();
+    },
+
+    make_trail: function(self) {
+        var vel = new Vector().xy(Math.random() * 2 - 1, Math.random() * 2 - 1);
+        var color = new Color({'red': 255, 'green': 175});
+        var lifetime = 1;
+        var size = 0.5;
+
+        new Particle(self.game, self.x, self.y, vel, color, lifetime, size);
     },
 });
 
 var Particle = PhysicsObject.extend({
     type: 'particle',
 
-    init: function(self, game, x, y, base_color) {
+    init: function(self, game, x, y, vel, color, lifetime, size) {
         self._super(game, x, y);
 
-        self.color = new Color(base_color);
-
-        var h = self.color.hue();
-        var s = self.color.saturation();
-        var l = self.color.lightness();
-        self.color.set({
-            hue: h + Math.random() * 30 - 15,
-            saturation: s - Math.random() * 10,
-            lightness: l + Math.random() * 20 - 10
-        });
-
-        self.lifetime = Math.random() * 20 + 10;
-        self.size = Math.random() + 1;
-
-        var angle = Math.random() * Math.PI * 2;
-        var vel = Math.random() * 20 + 5;
-        self.vel = new Vector().polar(angle, vel);
+        self.color = color;
+        self.lifetime = lifetime;
+        self.size = size
+        self.vel = vel;
     },
 
     tick: function(self, t) {
