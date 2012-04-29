@@ -15,8 +15,6 @@ var Game = Class.extend({
         $(window).on('resize', $.proxy(self.resizeCanvas, self));
         self.resizeCanvas();
 
-        self.tick();
-        self.redraw();
         self.timer = setInterval($.proxy(self.tick, self), 16);
 
         $(self.canvas).on('click', $.proxy(self.click, self));
@@ -27,6 +25,13 @@ var Game = Class.extend({
         self.world = {
             'grav': 0.8,
             'drag': 0.003,
+        }
+
+        self.launchers = [];
+        self.cur_launcher = 0;
+        var skew = (self.canvas.width - 50) / 2;
+        for (var i=0; i < 3; i++) {
+            self.launchers[i] = new Launcher(self, skew * i + 25, self.canvas.height - 25);
         }
     },
 
@@ -51,8 +56,9 @@ var Game = Class.extend({
     },
 
     do_touch: function(self, x, y) {
-        var launch_x = Math.random() * self.canvas.width;
-        new Firework(self, launch_x, self.canvas.height - 25, x, y);
+        self.launchers[self.cur_launcher].queue_add(x, y);
+        self.cur_launcher++;
+        self.cur_launcher %= 3;
     },
 
     click: function(self, e) {
@@ -132,6 +138,7 @@ var PhysicsObject = ScreenObject.extend({
     init: function(self, game, x, y) {
         self._super(game, x, y);
         self.drag = 1;
+        self.vel = new Vector();
     },
 
     tick: function(self, t) {
@@ -152,25 +159,73 @@ var PhysicsObject = ScreenObject.extend({
 });
 
 var Launcher = ScreenObject.extend({
+    type: "launcher",
+
+    init: function(self, game, x, y) {
+        self._super(game, x, y);
+        self.queue = [];
+        self.time = 0;
+        self.angle = -Math.PI/4;
+        self.turn_rate = 0.03;
+    },
+
+    tick: function(self, t) {
+        self._super(t);
+        self.time += t;
+
+        if (!self.queue.length) {
+            return;
+        }
+        var order = self.queue[0];
+        var vel = order[0];
+        var fuse = order[1];
+
+        if (Math.abs(self.angle - order[0].a) <= self.turn_rate) {
+            self.queue.splice(0, 1);
+            new Firework(self.game, self.x, self.y, vel, fuse);
+        } else {
+            if (vel.a < self.angle) {
+                self.angle -= self.turn_rate;
+            } else {
+                self.angle += self.turn_rate;
+            }
+        }
+    },
+
+    queue_add: function(self, tx, ty) {
+        var dx = tx - self.x;
+        var dy = ty - self.y;
+
+        var fuse = 25;
+        var vx = dx / fuse;
+        // Over estimate gravity, becaues the simulation isn't perfect.
+        var gtsq = self.game.world.grav * 1.01 * Math.pow(fuse, 2);
+        var vy = (dy - gtsq / 2) / fuse;
+        var vel = new Vector().xy(vx, vy);
+
+        self.queue.push([vel, fuse]);
+    },
+
+    draw: function(self, ctx) {
+        ctx.save();
+        ctx.translate(self.x, self.y);
+        ctx.rotate(self.angle);
+
+        ctx.fillStyle = 'rgb(127,127,127)';
+        ctx.fillRect(-10, -10, 40, 20);
+
+        ctx.restore();
+    }
 });
 
 var Firework = PhysicsObject.extend({
     type: 'firework',
-    init: function(self, game, x, y, tx, ty) {
+    init: function(self, game, x, y, vel, fuse) {
         self._super(game, x, y);
 
         self.drag = 0;
-
-        var dx = tx - x;
-        var dy = ty - y;
-
-        self.fuse = Math.log(Math.abs(dy)) * 5;
-
-        var vx = dx / self.fuse;
-        // Over estimate gravity, becaues the simulation isn't perfect.
-        var gtsq = self.game.world.grav * 1.01 * Math.pow(self.fuse, 2);
-        var vy = (dy - gtsq / 2) / self.fuse;
-        self.vel = new Vector().xy(vx, vy);
+        self.fuse = fuse;
+        self.vel = vel;
     },
 
     tick: function(self, t) {
