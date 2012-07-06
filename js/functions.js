@@ -203,3 +203,7 @@ var Vector = Class.extend({
         self.xy_dirty = false;
     }
 });
+
+function clamp(bottom, top, val) {
+    return Math.max(bottom, Math.min(val, top));
+}

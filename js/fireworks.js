@@ -172,7 +172,11 @@ var Launcher = ScreenObject.extend({
 
         if (Math.abs(self.angle - order[0].a) <= self.turn_rate) {
             self.queue.splice(0, 1);
-            new Firework(self.game, self.x, self.y, vel, fuse);
+            if (Math.random() > 0.5) {
+                new Firework(self.game, self.x, self.y, vel, fuse);
+            } else {
+                new Fizzler(self.game, self.x, self.y, vel, fuse);
+            }
         } else {
             if (vel.a < self.angle) {
                 self.angle -= self.turn_rate;
@@ -210,18 +214,31 @@ var Launcher = ScreenObject.extend({
 
 var Firework = PhysicsObject.extend({
     type: 'firework',
-    init: function(self, game, x, y, vel, fuse) {
+
+    default_opts: {
+        'trail': true,
+        'explosion_particles': 50,
+        'explosion_velocity': 20,
+    },
+
+    init: function(self, game, x, y, vel, fuse, opts) {
         self._super(game, x, y);
+
+        if (opts === undefined) {
+            opts = {};
+        }
 
         self.drag = 0;
         self.fuse = fuse;
         self.vel = vel;
 
-        self.base_color = new Color({
+        self.base_color = opts.color || new Color({
             'hue': Math.random()*360,
             'saturation': 100,
             'lightness': 50,
         });
+
+        self.opts = $.extend({}, self.default_opts, opts);
     },
 
     tick: function(self, t) {
@@ -239,15 +256,11 @@ var Firework = PhysicsObject.extend({
             self.explode();
         }
 
-        if (self.fuse > 5) {
-            self.make_trail();
-            self.make_trail();
-        }
+        self.make_trail();
     },
 
     explode: function(self) {
-        var particles_per_explosion = 60;
-        for (var j=0; j < particles_per_explosion; j++) {
+        for (var j=0; j < self.opts.explosion_particles; j++) {
             var color = new Color(self.base_color);
 
             var h = color.hue();
@@ -259,11 +272,11 @@ var Firework = PhysicsObject.extend({
                 lightness: l + Math.random() * 20 - 10
             });
 
-            var lifetime = Math.random() * 20 + 10;
+            var lifetime = Math.random() * 10 + 5;
             var size = Math.random() + 1;
 
             var angle = Math.random() * Math.PI * 2;
-            var mag = Math.random() * 20 + 5;
+            var mag = Math.random() * self.opts.explosion_velocity + 5;
             var vel = new Vector().polar(angle, mag);
 
             new Particle(self.game, self.x, self.y, vel, color, lifetime, size);
@@ -272,12 +285,61 @@ var Firework = PhysicsObject.extend({
     },
 
     make_trail: function(self) {
-        var vel = new Vector().xy(Math.random() * 2 - 1, Math.random() * 2 - 1);
-        var color = new Color({'red': 255, 'green': 175});
-        var lifetime = 1;
-        var size = 0.5;
+        var i, count, vel, color, lifetime, size;
+        if (self.opts.trail === false) {
+            return;
+        }
 
-        new Particle(self.game, self.x, self.y, vel, color, lifetime, size);
+        count = clamp(1, 3, self.fuse / 5);
+        for (i = 0; i < count; i++) {
+            vel = new Vector().xy(Math.random() * 2 - 1, Math.random() * 2 - 1);
+            color = new Color({'red': 240 + Math.random() * 15, 'green': 170 + Math.random() * 10});
+            lifetime = Math.random() * 2 + 1;
+            size = Math.random() * 1;
+
+            new Particle(self.game, self.x, self.y, vel, color, lifetime, size);
+        }
+
+    },
+});
+
+var Fizzler = Firework.extend({
+    type: 'fizzler',
+
+    default_opts: {
+        'trail': true,
+        'explosion_particles': 12,
+    },
+
+    explode: function(self) {
+        var i;
+        for (i = 0; i < self.opts.explosion_particles; i++) {
+            var color = new Color(self.base_color);
+
+            var h = color.hue();
+            var s = color.saturation();
+            var l = color.lightness();
+            color.set({
+                hue: h + Math.random() * 30 - 15,
+                saturation: s - Math.random() * 10,
+                lightness: l + Math.random() * 20 - 10
+            });
+
+            var lifetime = Math.random() * 5 + 5;
+
+            var angle = Math.random() * Math.PI * 2;
+            var mag = Math.random() * 5 + 10;
+            var vel = new Vector().polar(angle, mag);
+            vel.y -= self.game.world.grav * lifetime * 0.25;
+
+            new Firework(self.game, self.x, self.y, vel, lifetime, {
+                'color': color,
+                'trail': false,
+                'explosion_particles': 10,
+                'explosion_velocity': 0.5,
+            });
+        }
+        self.remove();
     },
 });
 
